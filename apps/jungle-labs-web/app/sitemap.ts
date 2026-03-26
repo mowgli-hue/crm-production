@@ -20,6 +20,12 @@ export default function sitemap(): MetadataRoute.Sitemap {
       priority: 0.8
     },
     {
+      url: `${base}/tiffin-go`,
+      lastModified: new Date(),
+      changeFrequency: "weekly",
+      priority: 0.8
+    },
+    {
       url: `${base}/learn-french`,
       lastModified: new Date(),
       changeFrequency: "weekly",

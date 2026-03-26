@@ -47,6 +47,7 @@ export const navLinks = [
   { label: "Products", href: "#products" },
   { label: "Services", href: "#services" },
   { label: "Technology", href: "#ecosystem" },
+  { label: "Tiffin Go", href: "/tiffin-go" },
   { label: "Learn French", href: "/learn-french" },
   { label: "French Resources", href: "/french-learning-resources" },
   { label: "Blog", href: "/blog" },
@@ -85,13 +86,15 @@ export const products: Product[] = [
     href: "mailto:admin@junglelabsworld.com?subject=Business%20Budget%20Intelligence%20Platform%20Access"
   },
   {
-    name: "Jungle Table Ordering OS",
-    subtitle: "Restaurant Tablet + KDS Platform",
+    name: "Tiffin Go",
+    subtitle: "Restaurant Ordering + Table Experience App",
     description:
-      "A full in-restaurant ordering system with table screens, live kitchen display workflows, and waiter call routing.",
+      "A full in-restaurant ordering system with table screens, smart kitchen routing, and waiter call support.",
     badge: "Hospitality Tech",
     status: "Active Build",
-    highlights: ["Table-side ordering UI", "Kitchen display system", "Realtime staff call and order status"]
+    highlights: ["Table-side ordering UI", "Kitchen display system", "Realtime staff call and order status"],
+    ctaLabel: "Explore Tiffin Go",
+    href: "/tiffin-go"
   }
 ];
 
