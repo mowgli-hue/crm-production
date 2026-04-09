@@ -21,7 +21,7 @@ import { isQuestionnaireComplete } from "@/lib/application-question-flows";
 import { canCreateCase, canManageUsers, tabsForRole, type AppScreen } from "@/lib/rbac";
 
 type Screen = AppScreen;
-type ClientScreen = "retainer" | "overview" | "documents" | "questions" | "results" | "chat";
+type ClientScreen = "retainer" | "overview" | "documents" | "questions" | "chat";
 type SessionUser = {
   id: string;
   name: string;
@@ -3729,13 +3729,14 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
     const c = cases[0];
     const companyName = company?.name || "Your Company";
     const caseChecklist: RequiredDocItem[] = c ? getChecklistForFormType(c.formType) : [];
+    const requiredChecklistItems = caseChecklist.filter((item) => item.required !== false);
     const clientReadyForDocs = Boolean(c && c.retainerSigned);
     const docsChecklistComplete = (() => {
       if (!c) return false;
-      const requiredItems = caseChecklist.filter((item) => item.required !== false);
-      if (requiredItems.length === 0) return documents.length > 0;
-      return requiredItems.every((item) => isChecklistDocUploaded(item));
+      if (requiredChecklistItems.length === 0) return documents.length > 0;
+      return requiredChecklistItems.every((item) => isChecklistDocUploaded(item));
     })();
+    const completedChecklistCount = requiredChecklistItems.filter((item) => isChecklistDocUploaded(item)).length;
     const openDocRequests = (docRequests || []).filter((r) => r.status === "open");
     const processingSupportPhone = "6049024500";
     const currentCaseKey = resolveApplicationChecklistKey(c?.formType || "generic");
@@ -3749,69 +3750,167 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
           })
           .sort((a, b) => Number(a.sortOrder || 0) - Number(b.sortOrder || 0))
       : [];
+    const taskCards = [
+      {
+        id: "retainer",
+        title: "Accept retainer",
+        description: c?.retainerSigned
+          ? "Your retainer agreement has been accepted."
+          : "Review the service agreement and continue to start your case.",
+        done: Boolean(c?.retainerSigned),
+        action: () => setClientScreen("retainer")
+      },
+      {
+        id: "questions",
+        title: "Complete questions",
+        description: clientIntakeDone
+          ? "Your intake questions are complete."
+          : "Answer the application questions so the team can process your file.",
+        done: clientIntakeDone,
+        action: () => setClientScreen("questions")
+      },
+      {
+        id: "documents",
+        title: "Upload documents",
+        description:
+          requiredChecklistItems.length > 0
+            ? `${completedChecklistCount}/${requiredChecklistItems.length} required documents uploaded.`
+            : docsChecklistComplete
+              ? "Documents uploaded."
+              : "Upload the required files for your application.",
+        done: docsChecklistComplete,
+        action: () => setClientScreen("documents")
+      }
+    ];
+    const mobileNavItems = [
+      { id: "overview" as const, label: "Tasks" },
+      { id: "questions" as const, label: "Questions" },
+      { id: "documents" as const, label: "Documents" },
+      { id: "chat" as const, label: "Chat" }
+    ];
     return (
-      <main className="mx-auto flex max-w-5xl flex-col gap-5 px-4 py-6 md:px-6 md:py-8">
+      <main className="mx-auto flex max-w-6xl flex-col gap-4 px-3 py-4 md:px-6 md:py-8">
         <Header {...headerProps} />
 
-        <section className="rounded-2xl border-2 border-slate-500 bg-white p-4 shadow-sm">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-xs text-slate-500">Client Portal</p>
-              <h2 className="text-xl font-semibold text-slate-900">{sessionUser.name}</h2>
-              <p className="text-xs text-slate-500">{company ? `/portal/${company.slug}` : ""}</p>
+        <section className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
+          <div className="bg-gradient-to-r from-slate-950 via-indigo-700 to-cyan-600 px-4 py-5 text-white md:px-6">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-white/70">Secure Client Portal</p>
+            <div className="mt-3 flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
+              <div>
+                <h2 className="text-2xl font-semibold md:text-3xl">{companyName}</h2>
+                <p className="mt-1 text-sm text-white/85">
+                  Continue your {c?.formType || "application"} file in one place.
+                </p>
+              </div>
+              <div className="grid grid-cols-2 gap-2 text-xs md:min-w-[320px]">
+                <div className="rounded-2xl border border-white/20 bg-white/10 px-3 py-2">
+                  <p className="text-white/70">Case</p>
+                  <p className="mt-1 font-semibold text-white">{c?.id || "-"}</p>
+                </div>
+                <div className="rounded-2xl border border-white/20 bg-white/10 px-3 py-2">
+                  <p className="text-white/70">Applicant</p>
+                  <p className="mt-1 font-semibold text-white">{sessionUser.name}</p>
+                </div>
+              </div>
             </div>
+          </div>
+          <div className="grid gap-3 px-4 py-4 md:grid-cols-3 md:px-6">
+            <article className="rounded-2xl border border-slate-200 bg-slate-50 p-3">
+              <p className="text-[11px] uppercase tracking-wide text-slate-500">Current step</p>
+              <p className="mt-1 text-base font-semibold text-slate-900">
+                {!c?.retainerSigned ? "Retainer pending" : !clientIntakeDone ? "Questions pending" : !docsChecklistComplete ? "Documents pending" : "Under review"}
+              </p>
+            </article>
+            <article className="rounded-2xl border border-slate-200 bg-slate-50 p-3">
+              <p className="text-[11px] uppercase tracking-wide text-slate-500">Questionnaire</p>
+              <p className="mt-1 text-base font-semibold text-slate-900">{clientIntakeDone ? "Completed" : "Pending"}</p>
+            </article>
+            <article className="rounded-2xl border border-slate-200 bg-slate-50 p-3">
+              <p className="text-[11px] uppercase tracking-wide text-slate-500">Required documents</p>
+              <p className="mt-1 text-base font-semibold text-slate-900">
+                {requiredChecklistItems.length > 0 ? `${completedChecklistCount}/${requiredChecklistItems.length} uploaded` : documents.length > 0 ? "Uploaded" : "Pending"}
+              </p>
+            </article>
           </div>
         </section>
 
         {c ? (
           <>
-            <section className="rounded-2xl border-2 border-slate-500 bg-white p-3 shadow-sm">
-              <div className="grid gap-2 sm:grid-cols-4">
-                <button onClick={() => setClientScreen("overview")} className={`rounded-lg border-2 px-3 py-2 text-sm font-semibold ${clientScreen !== "chat" ? "border-slate-900 bg-slate-900 text-white" : "border-slate-300 bg-white text-slate-700"}`}>Tasks</button>
-                <button onClick={() => setClientScreen("results")} className={`rounded-lg border-2 px-3 py-2 text-sm font-semibold ${clientScreen === "results" ? "border-slate-900 bg-slate-900 text-white" : "border-slate-300 bg-white text-slate-700"}`}>Results</button>
-                <button onClick={() => setClientScreen("chat")} className={`rounded-lg border-2 px-3 py-2 text-sm font-semibold ${clientScreen === "chat" ? "border-slate-900 bg-slate-900 text-white" : "border-slate-300 bg-white text-slate-700"}`}>Chat</button>
+            <section className="sticky top-2 z-10 rounded-2xl border border-slate-200 bg-white/95 p-2 shadow-sm backdrop-blur">
+              <div className="grid grid-cols-2 gap-2 md:grid-cols-4">
+                {mobileNavItems.map((item) => {
+                  const active =
+                    item.id === "overview"
+                      ? clientScreen === "overview" || clientScreen === "retainer"
+                      : clientScreen === item.id;
+                  return (
+                    <button
+                      key={item.id}
+                      onClick={() => setClientScreen(item.id)}
+                      className={`rounded-xl border px-3 py-2 text-sm font-semibold transition ${
+                        active ? "border-slate-900 bg-slate-900 text-white" : "border-slate-200 bg-white text-slate-700"
+                      }`}
+                    >
+                      {item.label}
+                    </button>
+                  );
+                })}
               </div>
             </section>
 
-            <section className="rounded-2xl border-2 border-slate-500 bg-white p-4 shadow-sm">
+            <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
               <button
                 onClick={() => setClientProfileOpen((prev) => !prev)}
-                className="flex w-full items-center justify-between rounded-lg border-2 border-slate-700 bg-slate-50 px-3 py-2 text-left text-sm font-semibold"
+                className="flex w-full items-center justify-between rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-left text-sm font-semibold"
               >
-                <span>Profile</span>
+                <span>Profile and progress</span>
                 <span>{clientProfileOpen ? "Hide" : "Show"}</span>
               </button>
               {clientProfileOpen ? (
-              <div className="mt-2 grid gap-2 md:grid-cols-2 text-sm">
-                <article className="rounded-lg border border-slate-200 p-2">
-                  <p className="text-xs text-slate-500">Case</p>
-                  <p className="font-semibold">{c.id}</p>
-                </article>
-                <article className="rounded-lg border border-slate-200 p-2">
-                  <p className="text-xs text-slate-500">Application</p>
-                  <p className="font-semibold">{c.formType}</p>
-                </article>
-              </div>
+                <div className="mt-3 grid gap-3 text-sm sm:grid-cols-2 lg:grid-cols-4">
+                  <article className="rounded-xl border border-slate-200 p-3">
+                    <p className="text-xs text-slate-500">Case</p>
+                    <p className="font-semibold">{c.id}</p>
+                  </article>
+                  <article className="rounded-xl border border-slate-200 p-3">
+                    <p className="text-xs text-slate-500">Application</p>
+                    <p className="font-semibold">{c.formType}</p>
+                  </article>
+                  <article className="rounded-xl border border-slate-200 p-3">
+                    <p className="text-xs text-slate-500">Questions</p>
+                    <p className="font-semibold">{clientIntakeDone ? "Completed" : "Pending"}</p>
+                  </article>
+                  <article className="rounded-xl border border-slate-200 p-3">
+                    <p className="text-xs text-slate-500">Documents</p>
+                    <p className="font-semibold">{docsChecklistComplete ? "Completed" : "Pending"}</p>
+                  </article>
+                </div>
               ) : null}
             </section>
 
             {clientScreen === "retainer" ? (
-              <section className="rounded-2xl border-2 border-slate-300 bg-white p-4">
-                <button onClick={() => setClientScreen("overview")} className="mb-2 rounded border border-slate-300 px-2 py-1 text-xs font-semibold">Back to Tasks</button>
-                <h3 className="font-semibold">Retainer Agreement</h3>
-                <p className="mt-2 text-sm text-slate-700">{companyName} service starts after retainer e-sign.</p>
-                <button
-                  onClick={() => downloadRetainer(c, companyName)}
-                  className="mt-2 rounded border border-slate-300 px-3 py-2 text-xs font-semibold"
-                >
-                  Download Retainer
-                </button>
+              <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+                <button onClick={() => setClientScreen("overview")} className="mb-3 rounded border border-slate-300 px-2 py-1 text-xs font-semibold">Back to Tasks</button>
+                <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+                  <div>
+                    <h3 className="text-lg font-semibold">Retainer Agreement</h3>
+                    <p className="mt-1 text-sm text-slate-700">
+                      Review the agreement below. Once you accept it, your portal tasks will unlock automatically.
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => downloadRetainer(c, companyName)}
+                    className="rounded-xl border border-slate-300 px-3 py-2 text-sm font-semibold"
+                  >
+                    Download PDF
+                  </button>
+                </div>
                 {!c.retainerSentAt ? (
-                  <div className="mt-3 rounded border border-amber-300 bg-amber-50 p-3 text-sm text-amber-800">
-                    Retainer auto-enabled for this secure invite.
+                  <div className="mt-3 rounded-2xl border border-amber-300 bg-amber-50 p-3 text-sm text-amber-800">
+                    This secure portal link already includes your retainer step.
                   </div>
                 ) : null}
-                <div className="mt-3 max-h-72 overflow-auto rounded border border-slate-200 bg-slate-50 p-3 text-xs leading-5 text-slate-700">
+                <div className="mt-3 max-h-80 overflow-auto rounded-2xl border border-slate-200 bg-slate-50 p-3 text-xs leading-5 text-slate-700">
                   <p className="font-semibold">{companyName} - Service Agreement</p>
                   <p className="mt-2">This agreement describes the relationship between the client and {companyName}. By continuing and accepting this agreement, the client confirms that they understand the services being provided and agree to the terms described below.</p>
                   <p className="mt-2">{companyName} is an immigration consulting firm providing immigration consulting services to individuals seeking assistance with Canadian immigration matters. The authorized consultant providing services through the firm is Navdeep Singh Sandhu (RCIC), License Number R705964. The business office is located at 9850 King George Blvd, Unit 202A, Surrey, British Columbia, Canada.</p>
@@ -3827,7 +3926,7 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
                 </div>
 
                 {c.retainerSigned ? (
-                  <div className="mt-3 rounded-lg border border-emerald-300 bg-emerald-50 p-3 text-sm text-emerald-800">
+                  <div className="mt-3 rounded-2xl border border-emerald-300 bg-emerald-50 p-3 text-sm text-emerald-800">
                     Retainer signed on {c.retainerRecord?.signedAt ? new Date(c.retainerRecord.signedAt).toLocaleString() : "recorded"} by{" "}
                     {(() => {
                       const signedBy = c.retainerRecord?.signerName?.trim();
@@ -3837,7 +3936,7 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
                   </div>
                 ) : (
                   <div className="mt-3 grid gap-2">
-                    <button onClick={() => void signRetainer(c.id)} className="rounded-lg bg-slate-900 px-3 py-2 text-sm font-semibold text-white">I Agree and Continue</button>
+                    <button onClick={() => void signRetainer(c.id)} className="rounded-xl bg-slate-900 px-3 py-3 text-sm font-semibold text-white">I Agree and Continue</button>
                     {retainerStatus ? <p className="text-xs text-slate-600">{retainerStatus}</p> : null}
                   </div>
                 )}
@@ -3845,75 +3944,134 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
             ) : null}
 
             {clientScreen === "overview" ? (
-              <>
-                <section className="grid gap-3 md:grid-cols-2">
-                  {!c.retainerSigned ? (
-                    <button onClick={() => setClientScreen("retainer")} className="rounded-xl border-2 border-slate-500 bg-white p-4 text-left shadow-sm">
-                      <p className="text-xs text-slate-500">Task</p>
-                      <p className="mt-1 text-lg font-semibold">Sign Retainer</p>
-                      <p className="text-xs text-slate-500">Pending</p>
-                      <p className="mt-2 text-xs font-semibold">[ ] To Do</p>
-                    </button>
-                  ) : null}
-                  <article className="rounded-xl border-2 border-slate-500 bg-white p-4 text-left shadow-sm">
+              <section className="space-y-4">
+                <div className="grid gap-3 md:grid-cols-3">
+                  {taskCards.map((task) => (
                     <button
-                      onClick={() => setClientWorkOpen((prev) => !prev)}
-                      className="flex w-full items-center justify-between text-left"
+                      key={task.id}
+                      onClick={task.action}
+                      className="rounded-2xl border border-slate-200 bg-white p-4 text-left shadow-sm transition hover:border-slate-400"
                     >
-                      <div>
-                        <p className="text-xs text-slate-500">Workflow</p>
-                        <p className="mt-1 text-lg font-semibold">Questions and Documents</p>
-                        <p className="text-xs text-slate-500">
-                          Questions: {clientIntakeDone ? "Completed" : "Pending"} | Documents: {docsChecklistComplete ? "Completed" : "Pending"}
-                        </p>
+                      <div className="flex items-start justify-between gap-3">
+                        <div>
+                          <p className="text-xs uppercase tracking-wide text-slate-500">Task</p>
+                          <p className="mt-1 text-lg font-semibold text-slate-900">{task.title}</p>
+                        </div>
+                        <span className={`rounded-full px-2 py-1 text-[11px] font-semibold ${task.done ? "bg-emerald-100 text-emerald-800" : "bg-amber-100 text-amber-800"}`}>
+                          {task.done ? "Done" : "Pending"}
+                        </span>
                       </div>
-                      <span className="text-xs font-semibold text-slate-700">{clientWorkOpen ? "Hide" : "Open"}</span>
+                      <p className="mt-3 text-sm text-slate-600">{task.description}</p>
                     </button>
-                    {clientWorkOpen ? (
-                      <div className="mt-3 flex flex-wrap gap-2">
-                        <button onClick={() => setClientScreen("questions")} className="rounded border border-slate-400 px-3 py-2 text-xs font-semibold">
-                          Open Questions
-                        </button>
-                        <button onClick={() => setClientScreen("documents")} className="rounded border border-slate-400 px-3 py-2 text-xs font-semibold">
-                          Open Documents
-                        </button>
+                  ))}
+                </div>
+                <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+                  <button
+                    onClick={() => setClientWorkOpen((prev) => !prev)}
+                    className="flex w-full items-center justify-between text-left"
+                  >
+                    <div>
+                      <p className="text-xs uppercase tracking-wide text-slate-500">What to do next</p>
+                      <p className="mt-1 text-lg font-semibold text-slate-900">Application checklist</p>
+                    </div>
+                    <span className="text-xs font-semibold text-slate-700">{clientWorkOpen ? "Hide" : "Show"}</span>
+                  </button>
+                  {clientWorkOpen ? (
+                    <div className="mt-4 grid gap-3 md:grid-cols-2">
+                      <div className="rounded-2xl border border-slate-200 bg-slate-50 p-3">
+                        <p className="text-sm font-semibold text-slate-900">Required documents</p>
+                        <ul className="mt-2 space-y-2 text-sm text-slate-700">
+                          {requiredChecklistItems.map((item) => (
+                            <li key={item.key} className="flex items-start justify-between gap-2">
+                              <span>{item.label}</span>
+                              <span className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${isChecklistDocUploaded(item) ? "bg-emerald-100 text-emerald-800" : "bg-slate-200 text-slate-700"}`}>
+                                {isChecklistDocUploaded(item) ? "Uploaded" : "Needed"}
+                              </span>
+                            </li>
+                          ))}
+                        </ul>
                       </div>
-                    ) : null}
-                  </article>
+                      <div className="rounded-2xl border border-slate-200 bg-slate-50 p-3">
+                        <p className="text-sm font-semibold text-slate-900">Need help?</p>
+                        <p className="mt-2 text-sm text-slate-600">
+                          You can complete your questions, upload documents, or message the Newton team from this portal.
+                        </p>
+                        <div className="mt-3 flex flex-wrap gap-2">
+                          <button onClick={() => setClientScreen("questions")} className="rounded-xl border border-slate-300 px-3 py-2 text-sm font-semibold">
+                            Open questions
+                          </button>
+                          <button onClick={() => setClientScreen("documents")} className="rounded-xl border border-slate-300 px-3 py-2 text-sm font-semibold">
+                            Open documents
+                          </button>
+                          <button onClick={() => setClientScreen("chat")} className="rounded-xl border border-slate-300 px-3 py-2 text-sm font-semibold">
+                            Ask assistant
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  ) : null}
                 </section>
-              </>
+              </section>
             ) : null}
 
             {clientScreen === "questions" ? (
-              <section className="rounded-2xl border-2 border-slate-500 bg-white p-4 shadow-sm">
-                <button onClick={() => setClientScreen("overview")} className="mb-2 rounded border border-slate-300 px-2 py-1 text-xs font-semibold">Back to Tasks</button>
-                <h3 className="font-semibold">Questions</h3>
-                <p className="mt-2 text-sm text-slate-700">Complete your questionnaire. System marks this task done automatically when required fields are filled.</p>
+              <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+                <button onClick={() => setClientScreen("overview")} className="mb-3 rounded border border-slate-300 px-2 py-1 text-xs font-semibold">Back to Tasks</button>
+                <h3 className="text-lg font-semibold">Questions</h3>
+                <p className="mt-2 text-sm text-slate-700">Complete your questionnaire. The portal will mark this step complete automatically once the required fields are submitted.</p>
+                <div className="mt-3 rounded-2xl border border-slate-200 bg-slate-50 p-3 text-sm text-slate-700">
+                  Application type: <span className="font-semibold">{c.formType}</span>
+                </div>
                 <a
                   href={questionnaireUrl(c.questionnaireLink, c.id)}
                   target="_blank"
-                  className="mt-3 inline-block rounded-lg border-2 border-slate-300 px-3 py-2 text-sm font-semibold"
+                  className="mt-3 inline-block rounded-xl border border-slate-300 px-4 py-3 text-sm font-semibold"
                 >
                   Open Question Form
                 </a>
-                <p className="mt-2 text-xs text-slate-500">{clientIntakeDone ? "[✓] Completed" : "[ ] Not completed yet"}</p>
+                <p className="mt-3 text-xs text-slate-500">{clientIntakeDone ? "Completed" : "Not completed yet"}</p>
               </section>
             ) : null}
 
             {clientScreen === "documents" ? (
-              <section className="rounded-2xl border-2 border-slate-500 bg-white p-4 shadow-sm">
-                <button onClick={() => setClientScreen("overview")} className="mb-2 rounded border border-slate-300 px-2 py-1 text-xs font-semibold">Back to Tasks</button>
-                <h3 className="font-semibold">Documents</h3>
+              <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+                <button onClick={() => setClientScreen("overview")} className="mb-3 rounded border border-slate-300 px-2 py-1 text-xs font-semibold">Back to Tasks</button>
+                <div className="flex flex-col gap-2 md:flex-row md:items-end md:justify-between">
+                  <div>
+                    <h3 className="text-lg font-semibold">Documents</h3>
+                    <p className="mt-1 text-sm text-slate-600">
+                      Upload the required documents for {c.formType}. The checklist below is tailored to this application.
+                    </p>
+                  </div>
+                  <div className="rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-semibold text-slate-700">
+                    {requiredChecklistItems.length > 0 ? `${completedChecklistCount}/${requiredChecklistItems.length} required uploaded` : `${documents.length} file(s) uploaded`}
+                  </div>
+                </div>
                 <div className="mt-3 space-y-2">
-                  <a href={clientReadyForDocs ? questionnaireUrl(c.questionnaireLink, c.id) : "#"} target="_blank" className={`block rounded-lg border-2 border-slate-300 px-3 py-2 text-sm font-semibold ${clientReadyForDocs ? "" : "pointer-events-none opacity-50"}`}>Fill Question Form</a>
+                  <div className="rounded-2xl border border-slate-200 bg-slate-50 p-3">
+                    <p className="text-sm font-semibold text-slate-900">Required checklist</p>
+                    <div className="mt-2 space-y-2">
+                      {caseChecklist.map((item) => (
+                        <div key={item.key} className="flex items-start justify-between gap-3 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm">
+                          <div>
+                            <p className="font-medium text-slate-900">{item.label}</p>
+                            <p className="text-xs text-slate-500">{item.required === false ? "Optional" : "Required"}</p>
+                          </div>
+                          <span className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${isChecklistDocUploaded(item) ? "bg-emerald-100 text-emerald-800" : "bg-slate-200 text-slate-700"}`}>
+                            {isChecklistDocUploaded(item) ? "Uploaded" : item.required === false ? "Optional" : "Needed"}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
                 </div>
                 {!clientReadyForDocs ? <p className="mt-2 text-xs text-amber-700">Complete retainer e-sign to unlock actions.</p> : null}
                 {clientReadyForDocs && openDocRequests.length > 0 ? (
-                  <div className="mt-3 rounded-lg border border-amber-300 bg-amber-50 p-3">
+                  <div className="mt-3 rounded-2xl border border-amber-300 bg-amber-50 p-3">
                     <p className="text-sm font-semibold text-amber-900">Additional documents requested by processing team</p>
                     <div className="mt-2 space-y-2">
                       {openDocRequests.map((req) => (
-                        <div key={req.id} className="rounded border border-amber-200 bg-white p-2">
+                        <div key={req.id} className="rounded-xl border border-amber-200 bg-white p-3">
                           <p className="text-xs font-semibold text-slate-800">{req.title}</p>
                           {req.details ? <p className="mt-1 text-xs text-slate-600">{req.details}</p> : null}
                           <div className="mt-2 flex flex-wrap items-center gap-2">
@@ -3983,7 +4141,7 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
                   </div>
                 ) : null}
                 {clientReadyForDocs ? (
-                  <div className="mt-3 rounded-lg border border-slate-200 bg-slate-50 p-3">
+                  <div className="mt-3 rounded-2xl border border-slate-200 bg-slate-50 p-3">
                     <p className="text-sm font-semibold text-slate-800">Extra Document Upload (Optional)</p>
                     <div className="mt-2 flex flex-wrap items-center gap-2">
                       <input
@@ -4003,31 +4161,40 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
                 ) : null}
                 <div className="mt-3 space-y-2">
                   {documents.map((d) => (
-                    <article key={d.id} className="rounded border border-slate-200 p-2 text-sm">
+                    <article key={d.id} className="rounded-xl border border-slate-200 p-3 text-sm">
                       <p className="font-semibold">{d.name}</p>
                       <p className="text-xs text-slate-500">{d.status}</p>
                       {d.link ? (
-                        <a href={d.link} target="_blank" className="text-xs text-blue-700 underline">
+                        <a href={d.link} target="_blank" className="mt-2 inline-block text-xs text-blue-700 underline">
                           Open file
                         </a>
                       ) : null}
                     </article>
                   ))}
+                  {documents.length === 0 ? <p className="text-xs text-slate-500">No documents uploaded yet.</p> : null}
                 </div>
               </section>
             ) : null}
 
             {clientScreen === "chat" ? (
-              <section className="rounded-2xl border-2 border-slate-500 bg-white p-4 shadow-sm">
-                <h3 className="font-semibold">Chat</h3>
-                <p className="mt-1 text-xs text-slate-500">All messages are saved to your case and visible to Newton team.</p>
-                <div className="mt-3 max-h-60 space-y-2 overflow-auto rounded border border-slate-200 p-2 text-sm">
+              <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+                <div className="flex flex-col gap-2 md:flex-row md:items-end md:justify-between">
+                  <div>
+                    <h3 className="text-lg font-semibold">AI assistant and chat</h3>
+                    <p className="mt-1 text-xs text-slate-500">All messages are saved to your case and visible to the Newton team.</p>
+                  </div>
+                  <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-800">
+                    Use “AI” for quick guidance. Use “Send” for a human team message.
+                  </div>
+                </div>
+                <div className="mt-3 max-h-72 space-y-2 overflow-auto rounded-2xl border border-slate-200 p-3 text-sm">
                   {messages.map((m) => (
-                    <div key={m.id} className="rounded bg-slate-50 p-2">
+                    <div key={m.id} className="rounded-xl bg-slate-50 p-3">
                       <p className="text-xs font-medium text-slate-600">{m.senderName}</p>
-                      <p>{m.text}</p>
+                      <p className="mt-1 whitespace-pre-wrap">{m.text}</p>
                     </div>
                   ))}
+                  {messages.length === 0 ? <p className="text-xs text-slate-500">No messages yet.</p> : null}
                 </div>
                 <div className="mt-2 flex gap-2">
                   <input value={chatText} onChange={(e) => setChatText(e.target.value)} className="flex-1 rounded border-2 border-slate-300 px-2 py-2 text-sm" placeholder="Type message" />
@@ -4040,7 +4207,7 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
           </>
         ) : null}
             {clientCustomSections.map((section) => (
-              <section key={section.id} className="rounded-2xl border-2 border-slate-500 bg-white p-4 shadow-sm">
+              <section key={section.id} className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
                 <div className="flex items-center justify-between gap-2">
                   <h3 className="font-semibold">{section.title}</h3>
                   <span className="rounded border border-slate-300 px-2 py-0.5 text-[10px] font-semibold uppercase text-slate-600">
@@ -4057,7 +4224,7 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
                 ) : null}
               </section>
             ))}
-            <section className="rounded-2xl border-2 border-slate-500 bg-white p-4 shadow-sm">
+            <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
               <h3 className="font-semibold">Contact Us</h3>
               <p className="mt-1 text-sm text-slate-700">
                 For case processing call at <span className="font-semibold">{processingSupportPhone}</span>.
@@ -4067,13 +4234,13 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
               href="https://www.franco.app"
               target="_blank"
               rel="noreferrer"
-              className="rounded-2xl border-2 border-blue-300 bg-blue-50 p-4 shadow-sm"
+              className="rounded-2xl border border-blue-300 bg-blue-50 p-5 shadow-sm"
             >
-              <p className="text-base font-semibold text-blue-900">
+              <p className="text-lg font-semibold text-blue-900">
                 Want to learn French for your immigration journey?
               </p>
               <p className="mt-1 text-sm text-blue-800">
-                Visit franco.app for structured French practice and support.
+                Visit franco.app for structured French practice, speaking support, and extra confidence before your next immigration step.
               </p>
             </a>
       </main>
