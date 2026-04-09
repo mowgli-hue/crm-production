@@ -2322,7 +2322,6 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
   }
 
   function buildInviteMessage(caseItem: CaseItem, url: string) {
-    const amount = Number(setupRetainerAmount || caseItem.servicePackage.retainerAmount || 0);
     return [
       `Hi ${caseItem.client},`,
       "",
@@ -2332,9 +2331,7 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
       `Complete your details and documents here:`,
       url,
       "",
-      amount > 0
-        ? `Interac amount: $${amount} CAD to ${fixedInteracRecipient} (use case number ${caseItem.id} in message).`
-        : `Please follow instructions inside your portal.`,
+      "Please follow instructions inside your portal.",
       "",
       "Newton Immigration Team"
     ].join("\n");
