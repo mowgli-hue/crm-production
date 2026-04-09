@@ -39,6 +39,10 @@ const SESSION_MAX_AGE_SECONDS = Math.max(
   Number(process.env.SESSION_MAX_AGE_SECONDS || 60 * 60 * 12)
 );
 
+function normalizePhoneDigits(value: string) {
+  return String(value || "").replace(/[^\d]/g, "");
+}
+
 const defaultStore: AppStore = {
   companies: [seedCompany],
   users: seedUsers,
@@ -766,6 +770,41 @@ export async function updateCompanyBranding(
 export async function getCase(companyId: string, caseId: string): Promise<CaseItem | null> {
   const store = await readStore();
   return store.cases.find((c) => c.companyId === companyId && c.id === caseId) ?? null;
+}
+
+export async function findCaseByPhone(phone: string, companyId?: string): Promise<CaseItem | null> {
+  const store = await readStore();
+  const incoming = normalizePhoneDigits(phone);
+  if (!incoming) return null;
+  const pool = store.cases
+    .filter((c) => !companyId || c.companyId === companyId)
+    .filter((c) => Boolean(c.leadPhone))
+    .sort((a, b) => String(b.updatedAt || b.createdAt || "").localeCompare(String(a.updatedAt || a.createdAt || "")));
+  return (
+    pool.find((c) => {
+      const existing = normalizePhoneDigits(String(c.leadPhone || ""));
+      return existing && (incoming.endsWith(existing) || existing.endsWith(incoming));
+    }) ?? null
+  );
+}
+
+export async function recordInboundClientContact(input: {
+  companyId: string;
+  caseId: string;
+  phone?: string;
+}): Promise<CaseItem | null> {
+  const store = await readStore();
+  const idx = store.cases.findIndex((c) => c.companyId === input.companyId && c.id === input.caseId);
+  if (idx === -1) return null;
+  const current = store.cases[idx];
+  store.cases[idx] = {
+    ...current,
+    leadPhone: String(input.phone || "").trim() || current.leadPhone,
+    unreadClientMessages: Number(current.unreadClientMessages || 0) + 1,
+    updatedAt: new Date().toISOString()
+  };
+  await writeStore(store);
+  return store.cases[idx];
 }
 
 export async function createCase(input: {

@@ -321,6 +321,11 @@ function aiStatusChipClass(status: string) {
   return "border-slate-300 bg-slate-50 text-slate-700";
 }
 
+function parseCaseIdFromNotificationMessage(message: string) {
+  const match = String(message || "").match(/(CASE-\d+)/i);
+  return match ? match[1].toUpperCase() : "";
+}
+
 type InternalExtractionIntake = {
   passportNumber?: string;
   passportIssueDate?: string;
@@ -711,6 +716,26 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
   }, [sessionUser?.id, sessionUser?.userType]);
 
   useEffect(() => {
+    if (!sessionUser || sessionUser.userType !== "staff" || !selectedCaseId) return;
+    let cancelled = false;
+    const tick = async () => {
+      const res = await apiFetch(`/cases/${selectedCaseId}/messages`, { cache: "no-store" });
+      if (!res.ok || cancelled) return;
+      const payload = await res.json().catch(() => ({}));
+      if (cancelled) return;
+      setMessages((payload.messages || []) as MessageItem[]);
+    };
+    const timer = setInterval(() => {
+      void tick();
+    }, 15000);
+    void tick();
+    return () => {
+      cancelled = true;
+      clearInterval(timer);
+    };
+  }, [selectedCaseId, sessionUser?.id, sessionUser?.userType]);
+
+  useEffect(() => {
     if (typeof window === "undefined") return;
     const token =
       new URLSearchParams(window.location.search).get("invite") ||
@@ -911,6 +936,13 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
     [legacyResults]
   );
   const pendingResultsQueue = useMemo(() => todaysResults.slice(0, 25), [todaysResults]);
+  const whatsappInboxNotifications = useMemo(
+    () =>
+      notifications
+        .filter((item) => String(item.message || "").toLowerCase().includes("whatsapp reply"))
+        .slice(0, 10),
+    [notifications]
+  );
   const normalizeAppNumber = (value: string) =>
     String(value || "")
       .toLowerCase()
@@ -1410,7 +1442,8 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
     caseId: string,
     channel: "email" | "whatsapp" | "sms",
     target: string,
-    message: string
+    message: string,
+    options?: { whatsappTemplate?: { bodyParams?: string[] } }
   ): Promise<"sent" | "provider_missing" | "failed" | "not_applicable"> {
     const trimmedTarget = String(target || "").trim();
     if (!trimmedTarget) return "not_applicable";
@@ -1420,7 +1453,8 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
       body: JSON.stringify({
         channel,
         target: trimmedTarget,
-        message
+        message,
+        whatsappTemplate: options?.whatsappTemplate
       })
     });
     const payload = await res.json().catch(() => ({}));
@@ -1531,7 +1565,11 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
 
         let sent = false;
         if (waPhone) {
-          const waStatus = await tryServerDispatchForCase(created.id, "whatsapp", waPhone, message);
+          const waStatus = await tryServerDispatchForCase(created.id, "whatsapp", waPhone, message, {
+            whatsappTemplate: {
+              bodyParams: [created.client, created.formType, created.id, inviteLink]
+            }
+          });
           if (waStatus === "sent") {
             inviteOutcome = " Invite auto-sent on WhatsApp.";
             sent = true;
@@ -2290,7 +2328,8 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
   async function tryServerDispatch(
     channel: "email" | "whatsapp" | "sms",
     target: string,
-    message: string
+    message: string,
+    options?: { whatsappTemplate?: { bodyParams?: string[] } }
   ): Promise<"sent" | "provider_missing" | "failed" | "not_applicable"> {
     if (!selectedCase) return "not_applicable";
     const trimmedTarget = String(target || "").trim();
@@ -2301,7 +2340,8 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
       body: JSON.stringify({
         channel,
         target: trimmedTarget,
-        message
+        message,
+        whatsappTemplate: options?.whatsappTemplate
       })
     });
     const payload = await res.json().catch(() => ({}));
@@ -5651,6 +5691,36 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
           {screen === "chat" ? (
             <section className="rounded-2xl border-2 border-slate-300 bg-white p-4">
               <h3 className="text-base font-semibold">Case Chat</h3>
+              <div className="mt-3 rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm">
+                <div className="flex items-center justify-between gap-2">
+                  <p className="font-semibold text-slate-900">WhatsApp Inbox</p>
+                  <p className="text-xs text-slate-500">Latest inbound client replies</p>
+                </div>
+                <div className="mt-2 max-h-40 space-y-2 overflow-auto">
+                  {whatsappInboxNotifications.map((item) => {
+                    const caseId = parseCaseIdFromNotificationMessage(item.message);
+                    return (
+                      <button
+                        key={item.id}
+                        onClick={() => {
+                          if (caseId) setSelectedCaseId(caseId);
+                        }}
+                        className="block w-full rounded border border-slate-200 bg-white p-2 text-left hover:bg-slate-100"
+                      >
+                        <p className="text-xs font-semibold text-slate-800">{caseId || "Unmatched Case"}</p>
+                        <p className="mt-1 text-xs text-slate-600">{item.message}</p>
+                        <p className="mt-1 text-[11px] text-slate-400">
+                          {new Date(item.createdAt).toLocaleString()}
+                        </p>
+                      </button>
+                    );
+                  })}
+                  {whatsappInboxNotifications.length === 0 ? (
+                    <p className="text-xs text-slate-500">No WhatsApp replies yet.</p>
+                  ) : null}
+                </div>
+              </div>
+
               <select value={selectedCase?.id ?? ""} onChange={(e) => setSelectedCaseId(e.target.value)} className="mt-2 w-full rounded-lg border-2 border-slate-300 px-2 py-2 text-sm">
                 {visibleCases.map((c) => <option key={c.id} value={c.id}>{c.id} - {c.client}</option>)}
               </select>

@@ -20,6 +20,14 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
   const channel = String(body.channel || "").trim().toLowerCase();
   const targetRaw = String(body.target || "").trim();
   const message = boundedText(body.message, 5000);
+  const whatsappTemplate =
+    channel === "whatsapp" && body?.whatsappTemplate
+      ? {
+          bodyParams: Array.isArray(body.whatsappTemplate.bodyParams)
+            ? body.whatsappTemplate.bodyParams.map((item: unknown) => String(item || "").trim()).filter(Boolean)
+            : []
+        }
+      : undefined;
   if (!["email", "sms", "whatsapp"].includes(channel)) {
     return NextResponse.json({ error: "Invalid channel" }, { status: 400 });
   }
@@ -40,7 +48,8 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
   const result = await dispatchCommunication({
     channel: channel as "email" | "sms" | "whatsapp",
     target,
-    message
+    message,
+    whatsappTemplate
   });
 
   const log = await addOutboundMessage({

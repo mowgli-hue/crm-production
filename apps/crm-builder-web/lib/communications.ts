@@ -7,6 +7,10 @@ export type DispatchResult = {
   detail?: string;
 };
 
+export type WhatsAppTemplateDispatchInput = {
+  bodyParams?: string[];
+};
+
 function hasEmailProvider() {
   return (
     String(process.env.SMTP_HOST || "").trim().length > 0 &&
@@ -102,11 +106,68 @@ async function sendViaWhatsAppCloud(target: string, message: string): Promise<Di
   }
 }
 
+async function sendViaWhatsAppTemplate(
+  target: string,
+  templateInput?: WhatsAppTemplateDispatchInput
+): Promise<DispatchResult> {
+  const token = String(process.env.WHATSAPP_ACCESS_TOKEN || "").trim();
+  const phoneNumberId = String(process.env.WHATSAPP_PHONE_NUMBER_ID || "").trim();
+  const templateName = String(process.env.WHATSAPP_TEMPLATE_NAME || "").trim();
+  const languageCode = String(process.env.WHATSAPP_TEMPLATE_LANGUAGE || "en").trim();
+  const to = normalizePhoneDigits(target);
+  if (!token || !phoneNumberId || !templateName) {
+    return { ok: false, status: "provider_missing", provider: "whatsapp_cloud_template" };
+  }
+
+  const bodyParams = (templateInput?.bodyParams || []).map((value) => ({
+    type: "text",
+    text: String(value || "").trim()
+  }));
+
+  try {
+    const res = await fetch(`https://graph.facebook.com/v20.0/${phoneNumberId}/messages`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        messaging_product: "whatsapp",
+        to,
+        type: "template",
+        template: {
+          name: templateName,
+          language: { code: languageCode },
+          components: bodyParams.length > 0 ? [{ type: "body", parameters: bodyParams }] : undefined
+        }
+      })
+    });
+    if (!res.ok) {
+      const txt = await res.text().catch(() => "");
+      return {
+        ok: false,
+        status: "failed",
+        provider: "whatsapp_cloud_template",
+        detail: `WhatsApp template ${res.status}: ${txt.slice(0, 300)}`
+      };
+    }
+    return { ok: true, status: "sent", provider: "whatsapp_cloud_template" };
+  } catch (e) {
+    return {
+      ok: false,
+      status: "failed",
+      provider: "whatsapp_cloud_template",
+      detail: String((e as Error)?.message || e)
+    };
+  }
+}
+
 // Provider-ready dispatch. Real provider calls can be plugged in without changing API/UI contract.
 export async function dispatchCommunication(input: {
   channel: DispatchChannel;
   target: string;
   message: string;
+  whatsappTemplate?: WhatsAppTemplateDispatchInput;
 }): Promise<DispatchResult> {
   const target = String(input.target || "").trim();
   const message = String(input.message || "").trim();
@@ -136,6 +197,12 @@ export async function dispatchCommunication(input: {
   if (input.channel === "whatsapp") {
     if (!hasWhatsAppProvider()) {
       return { ok: false, status: "provider_missing", provider: "whatsapp_cloud" };
+    }
+    if (input.whatsappTemplate) {
+      const templateResult = await sendViaWhatsAppTemplate(target, input.whatsappTemplate);
+      if (templateResult.ok || templateResult.status === "provider_missing") {
+        return templateResult;
+      }
     }
     return sendViaWhatsAppCloud(target, message);
   }
