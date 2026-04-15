@@ -47,6 +47,7 @@ export const navLinks = [
   { label: "Products", href: "#products" },
   { label: "Services", href: "#services" },
   { label: "Technology", href: "#ecosystem" },
+  { label: "RepTrack", href: "/reptrack" },
   { label: "Learn French", href: "/learn-french" },
   { label: "French Resources", href: "/french-learning-resources" },
   { label: "Blog", href: "/blog" },
@@ -83,6 +84,17 @@ export const products: Product[] = [
     highlights: ["Budget tracking", "Campaign ROI intelligence", "Cashflow and growth forecasting"],
     ctaLabel: "Request Early Access",
     href: "mailto:admin@junglelabsworld.com?subject=Business%20Budget%20Intelligence%20Platform%20Access"
+  },
+  {
+    name: "RepTrack",
+    subtitle: "Immigration Review + Case Risk Scanner",
+    description:
+      "A review workflow that helps surface missing items, risky gaps, and document issues across immigration files before submission.",
+    badge: "Immigration Tech",
+    status: "Active Build",
+    highlights: ["Document intake review", "Missing item detection", "Pre-submission quality control"],
+    ctaLabel: "Explore RepTrack",
+    href: "/reptrack"
   },
   {
     name: "Jungle Table Ordering OS",
